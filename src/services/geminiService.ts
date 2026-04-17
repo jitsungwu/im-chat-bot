@@ -4,14 +4,15 @@ export async function chatWithGemini(
   messages: { role: 'user' | 'model', content: string }[],
   userApiKey?: string
 ) {
-  // 除錯模式：暫時忽略使用者輸入的 API Key，強制使用系統環境變數中的金鑰
-  // const trimmedUserKey = userApiKey?.trim();
+  // 恢復最廣泛相容的 API Key 解析邏輯
+  const PLATFORM_KEY = process.env.GEMINI_API_KEY;
+  const VITE_KEY = (import.meta as any).env?.VITE_GEMINI_API_KEY;
   
-  // 強制使用系統 Key (process.env.GEMINI_API_KEY)
-  const apiKey = process.env.GEMINI_API_KEY;
+  // 目前依照您的要求：除錯模式下優先使用系統/環境變數金鑰，暫不使用 userApiKey
+  const apiKey = VITE_KEY || PLATFORM_KEY;
     
   if (!apiKey) {
-    throw new Error("Missing System Gemini API Key.");
+    throw new Error("Gemini API Key 尚未設定。請在部署環境中設定 VITE_GEMINI_API_KEY 或 GEMINI_API_KEY。");
   }
 
   const ai = new GoogleGenAI({ apiKey });
