@@ -1,7 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
 
-const defaultApiKey = process.env.GEMINI_API_KEY;
-
 export async function chatWithGemini(
   messages: { role: 'user' | 'model', content: string }[],
   userApiKey?: string
@@ -9,13 +7,13 @@ export async function chatWithGemini(
   // 確保排除空字串並去背空白
   const trimmedUserKey = userApiKey?.trim();
   
-  // 優先使用使用者提供的 API Key，否則使用系統預設的
+  // 依照官方指南：React (Vite) 環境下使用 process.env.GEMINI_API_KEY
   const apiKey = (trimmedUserKey && trimmedUserKey.length > 0) 
     ? trimmedUserKey 
-    : (import.meta.env.VITE_GEMINI_API_KEY || defaultApiKey);
+    : process.env.GEMINI_API_KEY;
     
   if (!apiKey) {
-    throw new Error("Missing Gemini API Key. Please provide one.");
+    throw new Error("Missing Gemini API Key.");
   }
 
   const ai = new GoogleGenAI({ apiKey });
@@ -58,23 +56,22 @@ export async function chatWithGemini(
   };
 
   try {
-    // 1. 直接嘗試首選模型：Gemma 4 31B
-    const modelName = "gemma-4-31b";
+    // 1. 優先使用 gemini-3.1-flash-lite-preview
+    const modelName = "gemini-3.1-flash-lite-preview";
     const response = await tryGenerate(modelName);
     return { text: response.text, model: modelName };
   } catch (error: any) {
     const errorString = error?.message || String(error);
     const isQuotaExceeded = errorString.includes('429') || errorString.includes('RESOURCE_EXHAUSTED');
 
-    // 2. 如果 Gemma 4 額度滿了，則嘗試備用模型：Gemma 3 27B
+    // 2. 有問題或額度滿時，切換到 gemma-4-31b-it
     if (isQuotaExceeded && !userApiKey) {
-      console.warn("Gemma 4 quota exceeded, trying Gemma 3...");
+      console.warn("Primary model limit reached, trying gemma-4-31b-it...");
       try {
-        const fallbackModel = "gemma-3-27b";
+        const fallbackModel = "gemma-4-31b-it";
         const response = await tryGenerate(fallbackModel);
         return { text: response.text, model: fallbackModel };
       } catch (retryError) {
-        // 全面耗盡，交給 UI 處理
         throw retryError;
       }
     }
