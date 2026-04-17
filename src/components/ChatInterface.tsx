@@ -25,6 +25,7 @@ export default function ChatInterface() {
   ]);
   const [input, setInput] = useState('');
   const [userApiKey, setUserApiKey] = useState('');
+  const [currentModel, setCurrentModel] = useState<string>('gemini-3-flash-preview');
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [quota, setQuota] = useState({
@@ -75,7 +76,9 @@ export default function ChatInterface() {
         content: msg.content
       }));
       
-      const response = await chatWithGemini(chatHistory, userApiKey);
+      const result = await chatWithGemini(chatHistory, userApiKey);
+      const { text: response, model: usedModel } = result;
+      setCurrentModel(usedModel);
       
       // 如果沒有使用自定義 API Key，才扣除額度
       if (!userApiKey) {
@@ -180,17 +183,38 @@ export default function ChatInterface() {
         </div>
 
         <div className="mt-auto pt-5 border-t border-white/10 space-y-4">
+          <div className="px-2 mb-2">
+            <h3 className="text-[10px] uppercase opacity-50 tracking-[1.5px] mb-3">存取狀態</h3>
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className={cn(
+                  "w-2 h-2 rounded-full",
+                  userApiKey ? "bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.5)]" : "bg-accent-gold shadow-[0_0_8px_rgba(255,191,41,0.5)]"
+                )} />
+                <span className="text-xs font-medium">
+                  {userApiKey ? "個人 API 連線中" : "系統分配連線中"}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 px-1">
+                <Bot size={12} className="opacity-50" />
+                <span className="text-[10px] font-mono opacity-60 truncate max-w-[150px]">
+                  {currentModel}
+                </span>
+              </div>
+            </div>
+          </div>
+
           {/* Quota Display */}
-          <div className="bg-white/10 rounded-xl p-4">
+          <div className="bg-white/10 rounded-xl p-4 border border-white/5">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-[10px] uppercase opacity-50 tracking-wider">
-                {userApiKey ? "正在使用自定義 Key" : "今日剩餘額度"}
+              <span className="text-[10px] uppercase opacity-60 tracking-wider">
+                {userApiKey ? "個人額度狀態" : "每日免費諮詢額度"}
               </span>
               <span className="text-xs font-bold text-accent-gold">
-                {userApiKey ? "∞" : `${quota.remaining}/${quota.total}`}
+                {userApiKey ? "無限制" : `${quota.remaining} / ${quota.total}`}
               </span>
             </div>
-            <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+            <div className="w-full h-1.5 bg-black/20 rounded-full overflow-hidden mb-2">
               <motion.div 
                 initial={{ width: 0 }}
                 animate={{ width: userApiKey ? '100%' : `${(quota.remaining / quota.total) * 100}%` }}
@@ -200,10 +224,14 @@ export default function ChatInterface() {
                 )}
               />
             </div>
-            <p className="text-[9px] mt-2 opacity-50 leading-tight">
+            <div className="flex justify-between text-[9px] opacity-40">
+              <span>目前已用: {quota.total - quota.remaining}</span>
+              <span>上限: {quota.total}</span>
+            </div>
+            <p className="text-[9px] mt-3 opacity-50 leading-relaxed italic border-t border-white/5 pt-2">
               {userApiKey 
-                ? "您已啟用自定義 API Key，諮詢次數將不再受限。" 
-                : `為了確保服務品質，每位同學每日僅限諮詢 ${quota.total} 次。`}
+                ? "您正在使用自己的 Key，不受系統公共額度限制。" 
+                : "系統每天提供每位使用者 15 次免費諮詢。"}
             </p>
           </div>
 
@@ -317,11 +345,25 @@ export default function ChatInterface() {
 
         {/* Header */}
         <header className="h-20 border-b border-border-color px-6 md:px-10 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-2 font-medium text-sm text-text-dark">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-sm shadow-green-200" />
-            資管系線上諮詢服務
+          <div className="flex items-center gap-4">
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2 font-medium text-sm text-text-dark">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-sm shadow-green-200" />
+                <span className="hidden xs:inline">資管系線上諮詢服務</span>
+              </div>
+              <span className="text-[9px] font-mono opacity-40 ml-4 hidden sm:block">
+                Engine: {currentModel}
+              </span>
+            </div>
+            {/* Mobile usage indicator */}
+            <div className="lg:hidden flex items-center gap-1.5 bg-bg-gray px-2.5 py-1 rounded-full border border-border-color">
+              <span className="text-[9px] font-bold text-text-light uppercase">額度</span>
+              <span className="text-[10px] font-bold text-primary-blue">
+                {userApiKey ? "∞" : `${quota.remaining}/${quota.total}`}
+              </span>
+            </div>
           </div>
-          <div className="font-serif italic text-accent-gold font-bold text-lg hidden sm:block">
+          <div className="font-serif italic text-accent-gold font-bold text-lg hidden md:block">
             Information Management
           </div>
           <button 

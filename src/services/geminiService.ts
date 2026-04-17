@@ -7,7 +7,6 @@ export async function chatWithGemini(
   userApiKey?: string
 ) {
   // 優先使用使用者提供的 API Key，否則使用系統預設的
-  // 支援 Vite 用戶端環境變數 (VITE_GEMINI_API_KEY)
   const apiKey = userApiKey || import.meta.env.VITE_GEMINI_API_KEY || defaultApiKey;
   const ai = new GoogleGenAI({ apiKey: apiKey! });
 
@@ -18,11 +17,7 @@ export async function chatWithGemini(
   
   const currentMessage = messages[messages.length - 1].content;
 
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: [...history, { role: 'user', parts: [{ text: currentMessage }] }],
-    config: {
-      systemInstruction: `你是一個輔仁大學資訊管理學系（輔大資管）的專業諮詢機器人。
+  const systemInstruction = `你是一個輔仁大學資訊管理學系（輔大資管）的專業諮詢機器人。
 你的任務是回答高中生及家長關於本系的各種問題。
 
 **核心指令：**
@@ -38,12 +33,43 @@ export async function chatWithGemini(
 回答準則：
 - 語氣親切、專業且具備教育熱誠。
 - 使用正體中文。
-- 鼓勵學生來報考輔大資管，但必須建立在真實的系所優勢之上。`,
-      tools: [
-        { googleSearch: {} }
-      ]
-    },
-  });
+- 鼓勵學生來報考輔大資管，但必須建立在真實的系所優勢之上。`;
 
-  return response.text;
+  // 定義嘗試生成的函式
+  const tryGenerate = async (modelName: string) => {
+    return await ai.models.generateContent({
+      model: modelName,
+      contents: [...history, { role: 'user', parts: [{ text: currentMessage }] }],
+      config: {
+        systemInstruction,
+        tools: [{ googleSearch: {} }]
+      },
+    });
+  };
+
+  try {
+    // 1. 首先嘗試最強大的模型
+    const modelName = "gemini-3-flash-preview";
+    const response = await tryGenerate(modelName);
+    return { text: response.text, model: modelName };
+  } catch (error: any) {
+    const errorString = error?.message || String(error);
+    const isQuotaExceeded = errorString.includes('429') || errorString.includes('RESOURCE_EXHAUSTED');
+
+    // 2. 如果額度滿了且沒有使用 User Key，則自動切換至額度較高的 Lite 模型
+    if (isQuotaExceeded && !userApiKey) {
+      console.warn("Primary model quota exceeded, switching to high-quota lite model...");
+      try {
+        const fallbackModel = "gemini-3.1-flash-lite-preview";
+        const response = await tryGenerate(fallbackModel);
+        return { text: response.text, model: fallbackModel };
+      } catch (retryError) {
+        // 如果連 Lite 也滿了，拋出錯誤讓 UI 處理（彈出輸入 Key 視窗）
+        throw retryError;
+      }
+    }
+    
+    // 其他錯誤直接拋出
+    throw error;
+  }
 }
