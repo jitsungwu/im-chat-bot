@@ -47,7 +47,9 @@ export const quotaService = {
   },
 
   hasQuota(): boolean {
-    return this.getUsage() < MAX_QUOTA;
+    // 偵錯模式：暫時註解掉限制，始終允許訪問
+    // return this.getUsage() < MAX_QUOTA;
+    return true;
   },
 
   getMaxQuota(): number {

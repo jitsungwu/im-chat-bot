@@ -213,36 +213,34 @@ export default function ChatInterface() {
             </div>
           </div>
 
-          {/* Quota Display */}
-          <div className="bg-white/10 rounded-xl p-4 border border-white/5">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-[10px] uppercase opacity-60 tracking-wider">
-                {userApiKey ? "個人額度狀態" : "每日免費諮詢額度"}
-              </span>
-              <span className="text-xs font-bold text-accent-gold">
-                {userApiKey ? "無限制" : `${quota.remaining} / ${quota.total}`}
-              </span>
+            {/* Quota Display */}
+            <div className="bg-white/10 rounded-xl p-4 border border-white/5 relative overflow-hidden">
+              <div className="absolute top-0 right-0 bg-red-500 text-[8px] px-1.5 py-0.5 font-bold uppercase tracking-tighter">Debug Mode</div>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-[10px] uppercase opacity-60 tracking-wider">
+                  {userApiKey ? "個人額度狀態" : "每日免費諮詢額度"}
+                </span>
+                <span className="text-xs font-bold text-accent-gold">
+                  {userApiKey ? "無限制" : "除錯模式 (無限制)"}
+                </span>
+              </div>
+              <div className="w-full h-1.5 bg-black/20 rounded-full overflow-hidden mb-2">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: '100%' }}
+                  className="h-full bg-green-400 transition-all duration-500"
+                />
+              </div>
+              <div className="flex justify-between text-[9px] opacity-40">
+                <span>目前已用: {quota.total - quota.remaining}</span>
+                <span>上限: {quota.total}</span>
+              </div>
+              <p className="text-[9px] mt-3 opacity-50 leading-relaxed italic border-t border-white/5 pt-2">
+                {userApiKey 
+                  ? "您正在使用自己的 Key，不受系統公共額度限制。" 
+                  : "目前為除錯模式，已暫時解除 30 次的使用限制。"}
+              </p>
             </div>
-            <div className="w-full h-1.5 bg-black/20 rounded-full overflow-hidden mb-2">
-              <motion.div 
-                initial={{ width: 0 }}
-                animate={{ width: userApiKey ? '100%' : `${(quota.remaining / quota.total) * 100}%` }}
-                className={cn(
-                  "h-full transition-all duration-500",
-                  userApiKey ? "bg-green-400" : (quota.remaining < 3 ? "bg-red-400" : "bg-accent-gold")
-                )}
-              />
-            </div>
-            <div className="flex justify-between text-[9px] opacity-40">
-              <span>目前已用: {quota.total - quota.remaining}</span>
-              <span>上限: {quota.total}</span>
-            </div>
-            <p className="text-[9px] mt-3 opacity-50 leading-relaxed italic border-t border-white/5 pt-2">
-              {userApiKey 
-                ? "您正在使用自己的 Key，不受系統公共額度限制。" 
-                : "系統每天提供每位使用者 15 次免費諮詢。"}
-            </p>
-          </div>
 
           <a href="https://www.im.fju.edu.tw/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 rounded-lg text-sm hover:bg-white/5 cursor-pointer opacity-80">
             <span className="text-lg">🌐</span> 官方網站
