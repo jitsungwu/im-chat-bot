@@ -1,0 +1,6 @@
+{
+  "name": "輔大資管高中生 QA 機器人",
+  "description": "提供輔仁大學資訊管理學系高中生的相關問答與諮詢服務。",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

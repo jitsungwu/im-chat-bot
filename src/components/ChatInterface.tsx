@@ -1,0 +1,431 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Send, User, Bot, Loader2, Info, ChevronRight, MessageSquare, Key, X } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { cn } from '../lib/utils';
+import { chatWithGemini } from '../services/geminiService';
+import { quotaService } from '../services/quotaService';
+
+interface Message {
+  id: string;
+  role: 'user' | 'model';
+  content: string;
+  timestamp: Date;
+}
+
+export default function ChatInterface() {
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: '1',
+      role: 'model',
+      content: '嗨！我是輔大資管的諮詢小助手。如果你有關於系所特色、課程、招生或是未來發展的問題，都可以問我喔！😊',
+      timestamp: new Date(),
+    },
+  ]);
+  const [input, setInput] = useState('');
+  const [userApiKey, setUserApiKey] = useState('');
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [quota, setQuota] = useState({
+    remaining: quotaService.getRemainingQuota(),
+    total: quotaService.getMaxQuota()
+  });
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // 初始化額度
+    setQuota({
+      remaining: quotaService.getRemainingQuota(),
+      total: quotaService.getMaxQuota()
+    });
+  }, []);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isLoading) return;
+
+    if (!quotaService.hasQuota() && !userApiKey) {
+      setIsApiKeyModalOpen(true);
+      return;
+    }
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: input,
+      timestamp: new Date(),
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+    setInput('');
+    setIsLoading(true);
+
+    try {
+      const chatHistory = messages.concat(userMessage).map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }));
+      
+      const response = await chatWithGemini(chatHistory, userApiKey);
+      
+      // 如果沒有使用自定義 API Key，才扣除額度
+      if (!userApiKey) {
+        quotaService.incrementUsage();
+        setQuota({
+          remaining: quotaService.getRemainingQuota(),
+          total: quotaService.getMaxQuota()
+        });
+      }
+
+      const botMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'model',
+        content: response || '抱歉，我現在無法回答這個問題。',
+        timestamp: new Date(),
+      };
+
+      setMessages((prev) => [...prev, botMessage]);
+    } catch (error) {
+      console.error('Chat Error:', error);
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'model',
+        content: '哎呀，發生了一些錯誤，請稍後再試。',
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const [isInfoOpen, setIsInfoOpen] = useState(false);
+
+  return (
+    <div className="flex h-screen bg-bg-gray overflow-hidden">
+      {/* Sidebar */}
+      <aside className="w-[280px] bg-primary-blue text-white p-8 flex flex-col gap-6 hidden lg:flex flex-shrink-0">
+        <div className="border-b border-white/10 pb-5">
+          <h1 className="text-xl font-bold tracking-wider">輔仁大學資訊管理學系</h1>
+          <p className="text-xs opacity-70 mt-1 uppercase tracking-tighter italic">High School Q&A Assistant</p>
+        </div>
+        
+        <div className="space-y-6">
+          <div className="nav-group">
+            <h3 className="text-[10px] uppercase opacity-50 tracking-[1.5px] mb-3">問題分類</h3>
+            <div className="space-y-1">
+              <div 
+                onClick={() => setInput('我想了解輔大資管的招生管道與入學要求')}
+                className={cn(
+                  "nav-item flex items-center gap-3 p-3 rounded-lg text-sm transition-colors cursor-pointer",
+                  input === '我想了解輔大資管的招生管道與入學要求' ? "bg-white/20 font-semibold" : "bg-transparent hover:bg-white/5 opacity-80"
+                )}
+              >
+                <span className="text-lg">📋</span> 招生與入學
+              </div>
+              <div 
+                onClick={() => setInput('輔大資管有哪些特色課程與學程？')}
+                className={cn(
+                  "nav-item flex items-center gap-3 p-3 rounded-lg text-sm transition-colors cursor-pointer",
+                  input === '輔大資管有哪些特色課程與學程？' ? "bg-white/20 font-semibold" : "bg-transparent hover:bg-white/5 opacity-80"
+                )}
+              >
+                <span className="text-lg">📖</span> 課程與學程
+              </div>
+              <div 
+                onClick={() => setInput('畢業後的職場競爭力與就業發展如何？')}
+                className={cn(
+                  "nav-item flex items-center gap-3 p-3 rounded-lg text-sm transition-colors cursor-pointer",
+                  input === '畢業後的職場競爭力與就業發展如何？' ? "bg-white/20 font-semibold" : "bg-transparent hover:bg-white/5 opacity-80"
+                )}
+              >
+                <span className="text-lg">🎓</span> 就業與發展
+              </div>
+              <div 
+                onClick={() => setInput('輔大資管的學生生活、社團與實習機會多嗎？')}
+                className={cn(
+                  "nav-item flex items-center gap-3 p-3 rounded-lg text-sm transition-colors cursor-pointer",
+                  input === '輔大資管的學生生活、社團與實習機會多嗎？' ? "bg-white/20 font-semibold" : "bg-transparent hover:bg-white/5 opacity-80"
+                )}
+              >
+                <span className="text-lg">🎉</span> 學生生活與社團
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-auto pt-5 border-t border-white/10 space-y-4">
+          {/* Quota Display */}
+          <div className="bg-white/10 rounded-xl p-4">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-[10px] uppercase opacity-50 tracking-wider">
+                {userApiKey ? "正在使用自定義 Key" : "今日剩餘額度"}
+              </span>
+              <span className="text-xs font-bold text-accent-gold">
+                {userApiKey ? "∞" : `${quota.remaining}/${quota.total}`}
+              </span>
+            </div>
+            <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: userApiKey ? '100%' : `${(quota.remaining / quota.total) * 100}%` }}
+                className={cn(
+                  "h-full transition-all duration-500",
+                  userApiKey ? "bg-green-400" : (quota.remaining < 3 ? "bg-red-400" : "bg-accent-gold")
+                )}
+              />
+            </div>
+            <p className="text-[9px] mt-2 opacity-50 leading-tight">
+              {userApiKey 
+                ? "您已啟用自定義 API Key，諮詢次數將不再受限。" 
+                : `為了確保服務品質，每位同學每日僅限諮詢 ${quota.total} 次。`}
+            </p>
+          </div>
+
+          <a href="https://www.im.fju.edu.tw/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 rounded-lg text-sm hover:bg-white/5 cursor-pointer opacity-80">
+            <span className="text-lg">🌐</span> 官方網站
+          </a>
+        </div>
+      </aside>
+
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col bg-white overflow-hidden relative">
+        {/* API Key Modal */}
+      <AnimatePresence>
+        {isApiKeyModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl relative"
+            >
+              <button 
+                onClick={() => setIsApiKeyModalOpen(false)}
+                className="absolute top-4 right-4 p-2 text-text-light hover:bg-bg-gray rounded-full"
+              >
+                <X size={20} />
+              </button>
+              
+              <div className="w-12 h-12 bg-accent-gold/10 rounded-2xl flex items-center justify-center text-accent-gold mb-6">
+                <Key size={24} />
+              </div>
+              
+              <h2 className="text-xl font-bold mb-4 text-primary-blue">額度已達上限</h2>
+              <p className="text-text-dark text-sm mb-6 leading-relaxed">
+                您今日的免費諮詢額度已用完。若要繼續諮詢，您可以輸入自己的 **Gemini API Key**。
+                <br /><br />
+                <span className="text-[11px] text-text-light italic">
+                  * 您的 API Key 僅會用於本次連線，並不會存儲在我們的伺服器上。
+                </span>
+              </p>
+              
+              <div className="space-y-4">
+                <input
+                  type="password"
+                  value={userApiKey}
+                  onChange={(e) => setUserApiKey(e.target.value)}
+                  placeholder="輸入您的 API Key"
+                  className="w-full px-4 py-3 bg-bg-gray border border-border-color rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-blue/30 text-sm"
+                />
+                <button
+                  onClick={() => setIsApiKeyModalOpen(false)}
+                  className="w-full py-3 bg-primary-blue text-white rounded-xl font-medium shadow-lg hover:brightness-110 transition-all"
+                >
+                  確認並繼續
+                </button>
+                <a 
+                  href="https://aistudio.google.com/app/apikey" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="block text-center text-xs text-primary-blue hover:underline"
+                >
+                  如何取得 API Key？
+                </a>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* About Modal */}
+        <AnimatePresence>
+          {isInfoOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+              onClick={() => setIsInfoOpen(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h2 className="text-xl font-bold mb-4 flex items-center text-primary-blue">
+                  <Info className="mr-2 text-accent-gold" />
+                  關於此機器人
+                </h2>
+                <p className="text-text-dark text-sm mb-6 leading-relaxed">
+                  本機器人由 輔仁大學資訊管理學系 (FJU IM) 提供，旨在協助高中生解決招生與系所相關之疑問。
+                  <br /><br />
+                  所有回覆均參考系所官方網站資料並結合 AI 技術生成。如果您有更精密的問題，請參考官網或直接聯繫系辦公室。
+                </p>
+                <button
+                  onClick={() => setIsInfoOpen(false)}
+                  className="w-full py-3 bg-primary-blue text-white rounded-xl font-medium shadow-lg hover:brightness-110 transition-all"
+                >
+                  我知道了
+                </button>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Header */}
+        <header className="h-20 border-b border-border-color px-6 md:px-10 flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-2 font-medium text-sm text-text-dark">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-sm shadow-green-200" />
+            資管系線上諮詢服務
+          </div>
+          <div className="font-serif italic text-accent-gold font-bold text-lg hidden sm:block">
+            Information Management
+          </div>
+          <button 
+            onClick={() => setIsInfoOpen(true)}
+            className="p-2 text-text-light hover:bg-bg-gray rounded-full transition-colors lg:hidden"
+          >
+            <Info size={20} />
+          </button>
+        </header>
+
+        {/* Chat Viewport */}
+        <main className="flex-1 overflow-y-auto p-6 md:p-10 space-y-8 scrollbar-hide">
+          <div className="max-w-4xl mx-auto space-y-8">
+            <AnimatePresence initial={false}>
+              {messages.map((msg) => (
+                <motion.div
+                  key={msg.id}
+                  initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.3 }}
+                  className={cn(
+                    "flex flex-col max-w-[85%] md:max-w-[75%]",
+                    msg.role === 'user' ? "ml-auto items-end" : "mr-auto items-start"
+                  )}
+                >
+                  <div className={cn(
+                    "px-5 py-4 rounded-xl text-[15px] leading-relaxed",
+                    msg.role === 'user' 
+                      ? "bg-primary-blue text-white rounded-br-none" 
+                      : "bg-bg-gray text-text-dark rounded-bl-none border border-border-color"
+                  )}>
+                    <div className={cn("markdown-body", msg.role === 'user' ? "prose-invert" : "")}>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {msg.content}
+                      </ReactMarkdown>
+                    </div>
+                    {msg.role === 'model' && msg.id === '1' && (
+                      <div className="flex flex-wrap gap-2 mt-4">
+                        {['系所特色是什麼？', '資管跟資工有什麼差別？', '需要很強的數學基礎嗎？'].map((q) => (
+                          <button
+                            key={q}
+                            onClick={() => setInput(q)}
+                            className="px-4 py-2 border border-primary-blue rounded-full text-xs text-primary-blue bg-white hover:bg-primary-blue/[0.03] transition-colors"
+                          >
+                            {q}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className={cn(
+                    "text-[11px] mt-1.5 text-text-light",
+                    msg.role === 'user' ? "text-right" : "text-left"
+                  )}>
+                    {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+            
+            {isLoading && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="flex items-center space-x-2 text-text-light text-xs italic"
+              >
+                <Loader2 className="animate-spin text-accent-gold" size={14} />
+                <span>專員正在整理資料...</span>
+              </motion.div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+        </main>
+
+        {/* Suggested Questions (Bottom bar) */}
+        {!isLoading && messages.length > 2 && (
+          <div className="px-6 md:px-10 py-3 border-t border-border-color bg-white flex-shrink-0">
+            <div className="max-w-4xl mx-auto flex space-x-2 overflow-x-auto scrollbar-hide py-1">
+              {['系所特色', '招生管道', '畢業出路', '程式基礎', '數學能力'].map((q) => (
+                <button
+                  key={q}
+                  onClick={() => setInput(q)}
+                  className="px-4 py-1.5 border border-primary-blue rounded-full text-[13px] text-primary-blue whitespace-nowrap hover:bg-primary-blue/5 transition-colors"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Input Area */}
+        <footer className="p-6 md:p-10 border-t border-border-color bg-white flex-shrink-0">
+          <form onSubmit={handleSubmit} className="max-w-4xl mx-auto flex gap-4 h-14">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="請輸入您的問題，例如：學測成績要求..."
+              className="flex-1 px-6 bg-bg-gray border border-border-color rounded-xl focus:outline-none focus:ring-[1.5px] focus:ring-primary-blue/30 focus:border-primary-blue transition-all text-sm text-text-dark"
+            />
+            <button
+              type="submit"
+              disabled={!input.trim() || isLoading}
+              className={cn(
+                "px-6 rounded-lg font-semibold text-sm transition-all flex items-center justify-center gap-2",
+                input.trim() && !isLoading 
+                  ? "bg-primary-blue text-white shadow-md hover:brightness-110 active:scale-95" 
+                  : "bg-border-color text-text-light opacity-50 cursor-not-allowed"
+              )}
+            >
+              <Send size={18} />
+              <span className="hidden sm:inline">發送訊息</span>
+            </button>
+          </form>
+          <p className="text-[10px] text-center text-text-light mt-4 leading-relaxed">
+            © 2026 輔仁大學資訊管理學系 · 高中生專業諮詢平台
+          </p>
+        </footer>
+      </div>
+    </div>
+  );
+}
