@@ -25,7 +25,7 @@ export default function ChatInterface() {
   ]);
   const [input, setInput] = useState('');
   const [userApiKey, setUserApiKey] = useState('');
-  const [currentModel, setCurrentModel] = useState<string>('gemini-3-flash-preview');
+  const [currentModel, setCurrentModel] = useState<string>('gemini-3.1-flash-lite-preview');
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [quota, setQuota] = useState({

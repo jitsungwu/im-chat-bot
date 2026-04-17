@@ -48,28 +48,27 @@ export async function chatWithGemini(
   };
 
   try {
-    // 1. 首先嘗試最強大的模型
-    const modelName = "gemini-3-flash-preview";
+    // 1. 直接嘗試最高額度的 Lite 模型，確保多人連線穩定
+    const modelName = "gemini-3.1-flash-lite-preview";
     const response = await tryGenerate(modelName);
     return { text: response.text, model: modelName };
   } catch (error: any) {
     const errorString = error?.message || String(error);
     const isQuotaExceeded = errorString.includes('429') || errorString.includes('RESOURCE_EXHAUSTED');
 
-    // 2. 如果額度滿了且沒有使用 User Key，則自動切換至額度較高的 Lite 模型
+    // 2. 如果 Lite 額度滿了（通常是每日上限到期），則嘗試原本的 Flash 模型
     if (isQuotaExceeded && !userApiKey) {
-      console.warn("Primary model quota exceeded, switching to high-quota lite model...");
+      console.warn("Lite model quota exceeded, trying standard flash model...");
       try {
-        const fallbackModel = "gemini-3.1-flash-lite-preview";
+        const fallbackModel = "gemini-3-flash-preview";
         const response = await tryGenerate(fallbackModel);
         return { text: response.text, model: fallbackModel };
       } catch (retryError) {
-        // 如果連 Lite 也滿了，拋出錯誤讓 UI 處理（彈出輸入 Key 視窗）
+        // 全面耗盡，交給 UI 處理
         throw retryError;
       }
     }
     
-    // 其他錯誤直接拋出
     throw error;
   }
 }
