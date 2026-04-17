@@ -215,7 +215,7 @@ export default function ChatInterface() {
             </div>
           </div>
 
-            {/* Quota Display */}
+            {/* Quota Display - 暫時隱藏
             <div className="bg-white/10 rounded-xl p-4 border border-white/5 relative overflow-hidden">
               <div className="absolute top-0 right-0 bg-red-500 text-[8px] px-1.5 py-0.5 font-bold uppercase tracking-tighter">Debug Mode</div>
               <div className="flex justify-between items-center mb-2">
@@ -243,6 +243,7 @@ export default function ChatInterface() {
                   : "目前為除錯模式，已暫時解除 30 次的使用限制。"}
               </p>
             </div>
+            */}
 
           <a href="https://www.im.fju.edu.tw/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 rounded-lg text-sm hover:bg-white/5 cursor-pointer opacity-80">
             <span className="text-lg">🌐</span> 官方網站
@@ -309,13 +310,14 @@ export default function ChatInterface() {
                 Engine: {currentModel}
               </span>
             </div>
-            {/* Mobile usage indicator */}
+            {/* Mobile usage indicator - 暫時隱藏
             <div className="lg:hidden flex items-center gap-1.5 bg-bg-gray px-2.5 py-1 rounded-full border border-border-color">
               <span className="text-[9px] font-bold text-text-light uppercase">額度</span>
               <span className="text-[10px] font-bold text-primary-blue">
                 {userApiKey ? "∞" : `${quota.remaining}/${quota.total}`}
               </span>
             </div>
+            */}
           </div>
           <div className="font-serif italic text-accent-gold font-bold text-lg hidden md:block">
             Information Management
