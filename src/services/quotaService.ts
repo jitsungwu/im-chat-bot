@@ -1,5 +1,5 @@
 const QUOTA_KEY = 'chat_quota_usage';
-const MAX_QUOTA = 15; // 每個學生的每日額度
+const MAX_QUOTA = 30; // 每個學生的每日額度
 
 interface QuotaData {
   count: number;
