@@ -6,9 +6,19 @@ export async function chatWithGemini(
   messages: { role: 'user' | 'model', content: string }[],
   userApiKey?: string
 ) {
+  // 確保排除空字串並去背空白
+  const trimmedUserKey = userApiKey?.trim();
+  
   // 優先使用使用者提供的 API Key，否則使用系統預設的
-  const apiKey = userApiKey || import.meta.env.VITE_GEMINI_API_KEY || defaultApiKey;
-  const ai = new GoogleGenAI({ apiKey: apiKey! });
+  const apiKey = (trimmedUserKey && trimmedUserKey.length > 0) 
+    ? trimmedUserKey 
+    : (import.meta.env.VITE_GEMINI_API_KEY || defaultApiKey);
+    
+  if (!apiKey) {
+    throw new Error("Missing Gemini API Key. Please provide one.");
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
 
   const history = messages.slice(0, -1).map(m => ({
     role: m.role,

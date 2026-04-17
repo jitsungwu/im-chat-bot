@@ -194,6 +194,15 @@ export default function ChatInterface() {
                 <span className="text-xs font-medium">
                   {userApiKey ? "個人 API 連線中" : "系統分配連線中"}
                 </span>
+                {userApiKey && (
+                  <button 
+                    onClick={() => setUserApiKey('')}
+                    className="ml-auto text-[10px] bg-white/10 hover:bg-white/20 px-1.5 py-0.5 rounded transition-colors"
+                    title="清除個人 Key"
+                  >
+                    重設
+                  </button>
+                )}
               </div>
               <div className="flex items-center gap-2 px-1">
                 <Bot size={12} className="opacity-50" />
