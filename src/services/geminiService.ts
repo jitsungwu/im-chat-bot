@@ -1,11 +1,14 @@
 import { GoogleGenAI } from "@google/genai";
 
+const defaultApiKey = process.env.GEMINI_API_KEY;
+
 export async function chatWithGemini(
   messages: { role: 'user' | 'model', content: string }[],
   userApiKey?: string
 ) {
   // 優先使用使用者提供的 API Key，否則使用系統預設的
-  const apiKey = userApiKey || process.env.GEMINI_API_KEY;
+  // 支援 Vite 用戶端環境變數 (VITE_GEMINI_API_KEY)
+  const apiKey = userApiKey || import.meta.env.VITE_GEMINI_API_KEY || defaultApiKey;
   const ai = new GoogleGenAI({ apiKey: apiKey! });
 
   const history = messages.slice(0, -1).map(m => ({
