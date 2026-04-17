@@ -4,16 +4,14 @@ export async function chatWithGemini(
   messages: { role: 'user' | 'model', content: string }[],
   userApiKey?: string
 ) {
-  // 確保排除空字串並去背空白
-  const trimmedUserKey = userApiKey?.trim();
+  // 除錯模式：暫時忽略使用者輸入的 API Key，強制使用系統環境變數中的金鑰
+  // const trimmedUserKey = userApiKey?.trim();
   
-  // 依照官方指南：React (Vite) 環境下使用 process.env.GEMINI_API_KEY
-  const apiKey = (trimmedUserKey && trimmedUserKey.length > 0) 
-    ? trimmedUserKey 
-    : process.env.GEMINI_API_KEY;
+  // 強制使用系統 Key (process.env.GEMINI_API_KEY)
+  const apiKey = process.env.GEMINI_API_KEY;
     
   if (!apiKey) {
-    throw new Error("Missing Gemini API Key.");
+    throw new Error("Missing System Gemini API Key.");
   }
 
   const ai = new GoogleGenAI({ apiKey });
