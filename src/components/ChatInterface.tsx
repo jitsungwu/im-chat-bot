@@ -54,10 +54,12 @@ export default function ChatInterface() {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
+    /* 
     if (!quotaService.hasQuota() && !userApiKey) {
       setIsApiKeyModalOpen(true);
       return;
     }
+    */
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -105,11 +107,11 @@ export default function ChatInterface() {
       const isQuotaExceeded = errorString.includes('429') || errorString.includes('RESOURCE_EXHAUSTED');
 
       if (isQuotaExceeded && !userApiKey) {
-        setIsApiKeyModalOpen(true);
+        // setIsApiKeyModalOpen(true);
         const errorMessage: Message = {
           id: (Date.now() + 1).toString(),
           role: 'model',
-          content: '⚠️ **目前系統諮詢額度已滿**\n\n由於目前使用人數較多，免費額度已暫時耗盡。如果您有自己的 Gemini API Key，可以點擊彈窗輸入以繼續使用；或者請稍後再試。',
+          content: '⚠️ **目前系統諮詢額度已滿 (API 429 Error)**\n\n偵測到 API 限制，但目前為除錯模式，不主動要求輸入 Key。',
           timestamp: new Date(),
         };
         setMessages((prev) => [...prev, errorMessage]);
@@ -250,68 +252,13 @@ export default function ChatInterface() {
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col bg-white overflow-hidden relative">
-        {/* API Key Modal */}
+        {/* API Key Modal - 偵錯模式暫時關閉
       <AnimatePresence>
         {isApiKeyModalOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl relative"
-            >
-              <button 
-                onClick={() => setIsApiKeyModalOpen(false)}
-                className="absolute top-4 right-4 p-2 text-text-light hover:bg-bg-gray rounded-full"
-              >
-                <X size={20} />
-              </button>
-              
-              <div className="w-12 h-12 bg-accent-gold/10 rounded-2xl flex items-center justify-center text-accent-gold mb-6">
-                <Key size={24} />
-              </div>
-              
-              <h2 className="text-xl font-bold mb-4 text-primary-blue">額度已達上限</h2>
-              <p className="text-text-dark text-sm mb-6 leading-relaxed">
-                您今日的免費諮詢額度已用完。若要繼續諮詢，您可以輸入自己的 **Gemini API Key**。
-                <br /><br />
-                <span className="text-[11px] text-text-light italic">
-                  * 您的 API Key 僅會用於本次連線，並不會存儲在我們的伺服器上。
-                </span>
-              </p>
-              
-              <div className="space-y-4">
-                <input
-                  type="password"
-                  value={userApiKey}
-                  onChange={(e) => setUserApiKey(e.target.value)}
-                  placeholder="輸入您的 API Key"
-                  className="w-full px-4 py-3 bg-bg-gray border border-border-color rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-blue/30 text-sm"
-                />
-                <button
-                  onClick={() => setIsApiKeyModalOpen(false)}
-                  className="w-full py-3 bg-primary-blue text-white rounded-xl font-medium shadow-lg hover:brightness-110 transition-all"
-                >
-                  確認並繼續
-                </button>
-                <a 
-                  href="https://aistudio.google.com/app/apikey" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="block text-center text-xs text-primary-blue hover:underline"
-                >
-                  如何取得 API Key？
-                </a>
-              </div>
-            </motion.div>
-          </motion.div>
+          ...
         )}
       </AnimatePresence>
+      */}
 
       {/* About Modal */}
         <AnimatePresence>
