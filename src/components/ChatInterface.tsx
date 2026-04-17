@@ -94,15 +94,31 @@ export default function ChatInterface() {
       };
 
       setMessages((prev) => [...prev, botMessage]);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Chat Error:', error);
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'model',
-        content: '哎呀，發生了一些錯誤，請稍後再試。',
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+      
+      // 偵測是否為額度用盡 (429)
+      const errorString = error?.message || String(error);
+      const isQuotaExceeded = errorString.includes('429') || errorString.includes('RESOURCE_EXHAUSTED');
+
+      if (isQuotaExceeded && !userApiKey) {
+        setIsApiKeyModalOpen(true);
+        const errorMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'model',
+          content: '⚠️ **目前系統諮詢額度已滿**\n\n由於目前使用人數較多，免費額度已暫時耗盡。如果您有自己的 Gemini API Key，可以點擊彈窗輸入以繼續使用；或者請稍後再試。',
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, errorMessage]);
+      } else {
+        const errorMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'model',
+          content: '哎呀，發生了一些錯誤（可能與您的 API Key 有關），請檢查後再試。',
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, errorMessage]);
+      }
     } finally {
       setIsLoading(false);
     }
