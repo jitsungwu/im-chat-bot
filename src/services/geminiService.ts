@@ -1,25 +1,41 @@
 import { GoogleGenAI } from "@google/genai";
 
-export function hasSystemApiKey(): boolean {
+export function getSystemApiKey(): string | undefined {
   const PLATFORM_KEY = process.env.GEMINI_API_KEY;
   const VITE_KEY = (import.meta as any).env?.VITE_GEMINI_API_KEY;
-  return Boolean(VITE_KEY || PLATFORM_KEY);
+  const sysKey = (PLATFORM_KEY || VITE_KEY)?.trim();
+  return sysKey || undefined;
+}
+
+export function hasSystemApiKey(): boolean {
+  return Boolean(getSystemApiKey());
 }
 
 export async function chatWithGemini(
   messages: { role: 'user' | 'model', content: string }[],
   userApiKey?: string
 ) {
-  const PLATFORM_KEY = process.env.GEMINI_API_KEY;
-  const VITE_KEY = (import.meta as any).env?.VITE_GEMINI_API_KEY;
-  
-  // 優先使用使用者輸入的個人 API Key；若無則使用系統/部署環境變數金鑰
+  const systemKey = getSystemApiKey();
   const trimmedUserKey = userApiKey?.trim();
-  const apiKey = trimmedUserKey || VITE_KEY || PLATFORM_KEY;
-    
-  if (!apiKey) {
-    throw new Error("NO_API_KEY: 尚未設定 API Key，請先輸入您的個人 Google Gemini API Key。");
+  
+  // 核心規則：如果可以取得系統 API Key（如：AI Studio 裡），就直接使用；
+  // 如果無法取得，就要求使用者提供 API Key。
+  let apiKey: string;
+  let keySource: string;
+
+  if (systemKey) {
+    apiKey = systemKey;
+    keySource = "系統/AI Studio 平台金鑰 (自動取得)";
+  } else if (trimmedUserKey) {
+    apiKey = trimmedUserKey;
+    keySource = "使用者個人 API Key";
+  } else {
+    throw new Error("REQUIRED_USER_API_KEY: 目前環境無法取得系統金鑰，請提供您的 Google Gemini API Key 才能開始諮詢。");
   }
+
+  // 遮罩輸出金鑰末 4 碼，方便在 Console 檢查
+  const maskedKey = apiKey.length > 8 ? `${apiKey.slice(0, 4)}...${apiKey.slice(-4)}` : '****';
+  console.log(`[Gemini API] 發送請求 - 來源: ${keySource} (金鑰: ${maskedKey})`);
 
   const ai = new GoogleGenAI({ apiKey });
 

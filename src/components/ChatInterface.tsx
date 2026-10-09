@@ -46,6 +46,11 @@ export default function ChatInterface() {
       setTempApiKey(savedKey);
     }
 
+    // 若無法取得系統金鑰（如 GitHub Pages 靜態網站），且尚未設定個人 Key，主動彈窗要求使用者提供
+    if (!hasSystemApiKey() && !savedKey) {
+      setIsApiKeyModalOpen(true);
+    }
+
     // 初始化額度
     setQuota({
       remaining: quotaService.getRemainingQuota(),
@@ -91,8 +96,9 @@ export default function ChatInterface() {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
-    // 若完全沒有可用金鑰（使用者未設定且無系統金鑰），主動彈出設定視窗
-    if (!userApiKey && !hasSystemApiKey()) {
+    // 若無法取得系統金鑰，且使用者尚未提供金鑰，要求使用者提供金鑰
+    if (!hasSystemApiKey() && !userApiKey.trim()) {
+      setApiKeyError('此環境無法取得系統金鑰，請提供您的 Google Gemini API Key');
       handleOpenApiKeyModal();
       return;
     }
@@ -140,14 +146,18 @@ export default function ChatInterface() {
       
       const errorString = error?.message || String(error);
       const isQuotaExceeded = errorString.includes('429') || errorString.includes('RESOURCE_EXHAUSTED');
-      const isNoKey = errorString.includes('NO_API_KEY') || errorString.includes('API_KEY_INVALID') || errorString.includes('API Key 尚未設定');
+      const isNoKey = errorString.includes('REQUIRED_USER_API_KEY') || errorString.includes('NO_API_KEY') || errorString.includes('API_KEY_INVALID') || errorString.includes('API Key 尚未設定');
 
       if (isQuotaExceeded) {
         handleOpenApiKeyModal();
+        const content = userApiKey
+          ? `⚠️ **您的個人 API Key 回傳 429 配額超限 (RESOURCE_EXHAUSTED)**\n\nGoogle 伺服器拒絕了此次請求，常見原因如下：\n\n1. **Google Cloud 專案未綁定帳單 (Free Tier)**：在未綁定信用卡的免費方案中，Google 會給予極為嚴格的限制（甚至某些模型配額為 0），且被 429 擋下的請求不會計入後台的成功使用量。\n2. **Google AI Studio 專案不一致**：在 Rate Limit 頁面查看配額時，請確認左上角下拉選單的「Project」與您當初建立這把 API Key 的專案完全相同。\n3. **建議處置**：若需穩定使用，可至 Google AI Studio 點擊「Set up billing」綁定帳單（享有每月免費額度，不會產生意外費用），或更換其他專案的金鑰。`
+          : '⚠️ **公共連線額度已達上限 (429 資源限制)**\n\n系統目前免費公共配額已耗盡。已為您彈出「輸入個人 API Key 視窗」，請輸入您的個人 Google Gemini API Key 即可享有獨立額度並繼續諮詢！';
+
         const errorMessage: Message = {
           id: (Date.now() + 1).toString(),
           role: 'model',
-          content: '⚠️ **公共連線額度已達上限 (429 資源限制)**\n\n系統目前免費公共配額已耗盡。已為您彈出「輸入個人 API Key 視窗」，請輸入您的個人 Google Gemini API Key 即可享有獨立額度並繼續諮詢！',
+          content,
           timestamp: new Date(),
         };
         setMessages((prev) => [...prev, errorMessage]);
@@ -156,7 +166,7 @@ export default function ChatInterface() {
         const errorMessage: Message = {
           id: (Date.now() + 1).toString(),
           role: 'model',
-          content: '🔑 **請設定 Gemini API Key**\n\n尚未偵測到可用的 API Key。已為您開啟設定視窗，請填入個人的 Google Gemini API Key 即可開始使用！',
+          content: '🔑 **請提供個人的 Gemini API Key**\n\n目前環境無法取得系統金鑰（如 GitHub Pages 靜態網站）。已為您開啟設定視窗，請填入個人的 Google Gemini API Key 即可開始諮詢！',
           timestamp: new Date(),
         };
         setMessages((prev) => [...prev, errorMessage]);
@@ -234,19 +244,25 @@ export default function ChatInterface() {
               <div className="flex items-center gap-2">
                 <div className={cn(
                   "w-2 h-2 rounded-full",
-                  userApiKey ? "bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.5)]" : "bg-accent-gold shadow-[0_0_8px_rgba(255,191,41,0.5)]"
+                  hasSystemApiKey()
+                    ? "bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.5)]"
+                    : (userApiKey ? "bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.5)]" : "bg-accent-gold shadow-[0_0_8px_rgba(255,191,41,0.5)]")
                 )} />
                 <span className="text-xs font-medium">
-                  {userApiKey ? "個人 API 連線中" : "系統分配連線中"}
+                  {hasSystemApiKey()
+                    ? "系統金鑰連線 (AI Studio)"
+                    : (userApiKey ? "個人 Key 連線中" : "待提供 API Key")}
                 </span>
-                <button 
-                  onClick={handleOpenApiKeyModal}
-                  className="ml-auto text-[10px] bg-white/10 hover:bg-white/20 px-2 py-1 rounded transition-colors flex items-center gap-1"
-                  title={userApiKey ? "變更個人 API Key" : "輸入個人 API Key"}
-                >
-                  <Key size={10} />
-                  {userApiKey ? "管理 Key" : "設定 Key"}
-                </button>
+                {!hasSystemApiKey() && (
+                  <button 
+                    onClick={handleOpenApiKeyModal}
+                    className="ml-auto text-[10px] bg-white/10 hover:bg-white/20 px-2 py-1 rounded transition-colors flex items-center gap-1"
+                    title={userApiKey ? "變更個人 API Key" : "輸入個人 API Key"}
+                  >
+                    <Key size={10} />
+                    {userApiKey ? "管理 Key" : "輸入 Key"}
+                  </button>
+                )}
               </div>
               <div className="flex items-center gap-2 px-1">
                 <Bot size={12} className="opacity-50" />
@@ -338,7 +354,9 @@ export default function ChatInterface() {
                       <span>💡</span> 為什麼需要輸入個人的 API Key？
                     </p>
                     <p className="opacity-90">
-                      在 GitHub Pages 靜態網站或系統公共額度達到 Google 429 限制時，填入個人的 Google Gemini API Key 可以確保諮詢服務 100% 正常運作，完全免費且不與其他人共用額度限制。
+                      {hasSystemApiKey()
+                        ? "目前環境（如 AI Studio 預覽）已具備系統金鑰，系統將直接使用系統金鑰進行對話，無需額外設定！"
+                        : "目前環境（如 GitHub Pages 靜態網站）無法取得系統 API Key。請填寫個人的 Google Gemini API Key，即可享有獨立免費額度並開始諮詢。"}
                     </p>
                   </div>
 
@@ -467,19 +485,26 @@ export default function ChatInterface() {
             Information Management
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleOpenApiKeyModal}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors",
-                userApiKey 
-                  ? "border-green-300 bg-green-50 text-green-700 hover:bg-green-100" 
-                  : "border-border-color bg-white text-text-dark hover:bg-bg-gray"
-              )}
-              title="設定個人 Gemini API Key"
-            >
-              <Key size={13} className={userApiKey ? "text-green-600" : "text-accent-gold"} />
-              <span>{userApiKey ? "個人 Key (已啟用)" : "設定個人 Key"}</span>
-            </button>
+            {hasSystemApiKey() ? (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-green-200 bg-green-50 text-green-700 text-xs font-medium">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                <span>系統金鑰就緒 (AI Studio)</span>
+              </div>
+            ) : (
+              <button
+                onClick={handleOpenApiKeyModal}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors shadow-sm",
+                  userApiKey 
+                    ? "border-green-300 bg-green-50 text-green-700 hover:bg-green-100" 
+                    : "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 animate-pulse font-semibold"
+                )}
+                title="此環境需提供個人 Gemini API Key"
+              >
+                <Key size={13} className={userApiKey ? "text-green-600" : "text-amber-600"} />
+                <span>{userApiKey ? "個人 Key (已啟用)" : "請輸入 API Key"}</span>
+              </button>
+            )}
             <button 
               onClick={() => setIsInfoOpen(true)}
               className="p-2 text-text-light hover:bg-bg-gray rounded-full transition-colors lg:hidden"
