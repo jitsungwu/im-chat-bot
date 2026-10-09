@@ -54,23 +54,33 @@ export async function chatWithGemini(
     });
   };
 
-  try {
-    // 1. 優先使用 gemini-3.1-flash-lite-preview
-    const modelName = "gemini-3.1-flash-lite-preview";
-    const response = await tryGenerate(modelName);
-    return { text: response.text, model: modelName };
-  } catch (error: any) {
-    const errorString = error?.message || String(error);
-    const isQuotaExceeded = errorString.includes('429') || errorString.includes('RESOURCE_EXHAUSTED');
+  // 檢查是否為可備援切換的錯誤（429 額度超限、503 伺服器高負載、RESOURCE_EXHAUSTED、UNAVAILABLE）
+  const shouldFallback = (err: any) => {
+    const str = (err?.message || String(err)).toLowerCase();
+    return str.includes('429') || 
+           str.includes('resource_exhausted') || 
+           str.includes('503') || 
+           str.includes('unavailable') ||
+           str.includes('high demand');
+  };
 
-    // 2. 有問題或額度滿時，切換到 gemma-4-31b-it
-    if (isQuotaExceeded && !userApiKey) {
-      console.warn("Primary model limit reached, trying gemma-4-31b-it...");
+  try {
+    // 1. 恢復為 Google 官方最穩定、高可用性的標準模型：gemini-3.8-flash
+    const primaryModel = "gemini-3.8-flash";
+    const response = await tryGenerate(primaryModel);
+    return { text: response.text, model: primaryModel };
+  } catch (error: any) {
+    console.warn("Primary model (gemini-3.8-flash) failed:", error?.message || error);
+
+    // 2. 當首選模型遇到 429 額度限制或 503 伺服器壅塞時，切換至備援模型 gemini-3.1-flash-lite
+    if (shouldFallback(error)) {
+      console.warn("Switching to fallback model: gemini-3.1-flash-lite...");
       try {
-        const fallbackModel = "gemma-4-31b-it";
+        const fallbackModel = "gemini-3.1-flash-lite";
         const response = await tryGenerate(fallbackModel);
         return { text: response.text, model: fallbackModel };
-      } catch (retryError) {
+      } catch (retryError: any) {
+        console.error("Fallback model also failed:", retryError?.message || retryError);
         throw retryError;
       }
     }
