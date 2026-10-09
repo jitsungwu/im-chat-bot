@@ -1,18 +1,24 @@
 import { GoogleGenAI } from "@google/genai";
 
+export function hasSystemApiKey(): boolean {
+  const PLATFORM_KEY = process.env.GEMINI_API_KEY;
+  const VITE_KEY = (import.meta as any).env?.VITE_GEMINI_API_KEY;
+  return Boolean(VITE_KEY || PLATFORM_KEY);
+}
+
 export async function chatWithGemini(
   messages: { role: 'user' | 'model', content: string }[],
   userApiKey?: string
 ) {
-  // 恢復最廣泛相容的 API Key 解析邏輯
   const PLATFORM_KEY = process.env.GEMINI_API_KEY;
   const VITE_KEY = (import.meta as any).env?.VITE_GEMINI_API_KEY;
   
-  // 目前依照您的要求：除錯模式下優先使用系統/環境變數金鑰，暫不使用 userApiKey
-  const apiKey = VITE_KEY || PLATFORM_KEY;
+  // 優先使用使用者輸入的個人 API Key；若無則使用系統/部署環境變數金鑰
+  const trimmedUserKey = userApiKey?.trim();
+  const apiKey = trimmedUserKey || VITE_KEY || PLATFORM_KEY;
     
   if (!apiKey) {
-    throw new Error("Gemini API Key 尚未設定。請在部署環境中設定 VITE_GEMINI_API_KEY 或 GEMINI_API_KEY。");
+    throw new Error("NO_API_KEY: 尚未設定 API Key，請先輸入您的個人 Google Gemini API Key。");
   }
 
   const ai = new GoogleGenAI({ apiKey });
@@ -42,14 +48,14 @@ export async function chatWithGemini(
 - 使用正體中文。
 - 鼓勵學生來報考輔大資管，但必須建立在真實的系所優勢之上。`;
 
-  // 定義嘗試生成的函式
-  const tryGenerate = async (modelName: string) => {
+  // 定義嘗試生成的函式（支援 tool 備援）
+  const tryGenerate = async (modelName: string, withTools: boolean = true) => {
     return await ai.models.generateContent({
       model: modelName,
       contents: [...history, { role: 'user', parts: [{ text: currentMessage }] }],
       config: {
         systemInstruction,
-        tools: [{ googleSearch: {} }]
+        ...(withTools ? { tools: [{ googleSearch: {} }] } : {})
       },
     });
   };
@@ -65,10 +71,21 @@ export async function chatWithGemini(
   };
 
   try {
-    // 1. 恢復為 Google 官方最穩定、高可用性的標準模型：gemini-3.8-flash
+    // 1. 首選模型：gemini-3.8-flash
     const primaryModel = "gemini-3.8-flash";
-    const response = await tryGenerate(primaryModel);
-    return { text: response.text, model: primaryModel };
+    try {
+      const response = await tryGenerate(primaryModel, true);
+      return { text: response.text, model: primaryModel };
+    } catch (primarySearchErr: any) {
+      // 若因為 Google Search 工具限制或特定權限問題報錯，降級為不含工具生成
+      const errStr = String(primarySearchErr?.message || primarySearchErr).toLowerCase();
+      if (errStr.includes('tool') || errStr.includes('search') || errStr.includes('400') || errStr.includes('permission')) {
+        console.warn("Search tool failed on primary model, retrying without search:", primarySearchErr?.message);
+        const response = await tryGenerate(primaryModel, false);
+        return { text: response.text, model: primaryModel };
+      }
+      throw primarySearchErr;
+    }
   } catch (error: any) {
     console.warn("Primary model (gemini-3.8-flash) failed:", error?.message || error);
 
@@ -77,8 +94,13 @@ export async function chatWithGemini(
       console.warn("Switching to fallback model: gemini-3.1-flash-lite...");
       try {
         const fallbackModel = "gemini-3.1-flash-lite";
-        const response = await tryGenerate(fallbackModel);
-        return { text: response.text, model: fallbackModel };
+        try {
+          const response = await tryGenerate(fallbackModel, true);
+          return { text: response.text, model: fallbackModel };
+        } catch (fallbackToolErr) {
+          const response = await tryGenerate(fallbackModel, false);
+          return { text: response.text, model: fallbackModel };
+        }
       } catch (retryError: any) {
         console.error("Fallback model also failed:", retryError?.message || retryError);
         throw retryError;

@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Send, User, Bot, Loader2, Info, ChevronRight, MessageSquare, Key, X } from 'lucide-react';
+import { Send, User, Bot, Loader2, Info, ChevronRight, MessageSquare, Key, X, ExternalLink, Eye, EyeOff, Check, ShieldCheck } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '../lib/utils';
-import { chatWithGemini } from '../services/geminiService';
+import { chatWithGemini, hasSystemApiKey } from '../services/geminiService';
 import { quotaService } from '../services/quotaService';
 
 interface Message {
@@ -25,9 +25,13 @@ export default function ChatInterface() {
   ]);
   const [input, setInput] = useState('');
   const [userApiKey, setUserApiKey] = useState('');
+  const [tempApiKey, setTempApiKey] = useState('');
+  const [showApiKeyText, setShowApiKeyText] = useState(false);
+  const [apiKeyError, setApiKeyError] = useState('');
   const [currentModel, setCurrentModel] = useState<string>('gemini-3.8-flash');
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [quota, setQuota] = useState({
     remaining: quotaService.getRemainingQuota(),
     total: quotaService.getMaxQuota()
@@ -35,6 +39,13 @@ export default function ChatInterface() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // 從 localStorage 讀取先前儲存的個人 API Key
+    const savedKey = localStorage.getItem('user_gemini_api_key');
+    if (savedKey) {
+      setUserApiKey(savedKey);
+      setTempApiKey(savedKey);
+    }
+
     // 初始化額度
     setQuota({
       remaining: quotaService.getRemainingQuota(),
@@ -50,16 +61,41 @@ export default function ChatInterface() {
     scrollToBottom();
   }, [messages]);
 
+  const handleOpenApiKeyModal = () => {
+    setTempApiKey(userApiKey);
+    setApiKeyError('');
+    setIsApiKeyModalOpen(true);
+  };
+
+  const handleSaveApiKey = (keyToSave: string) => {
+    const cleanKey = keyToSave.trim();
+    if (!cleanKey) {
+      setApiKeyError('請輸入有效的 API Key');
+      return;
+    }
+    setUserApiKey(cleanKey);
+    localStorage.setItem('user_gemini_api_key', cleanKey);
+    setIsApiKeyModalOpen(false);
+    setApiKeyError('');
+  };
+
+  const handleClearApiKey = () => {
+    setUserApiKey('');
+    setTempApiKey('');
+    localStorage.removeItem('user_gemini_api_key');
+    setIsApiKeyModalOpen(false);
+    setApiKeyError('');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
-    /* 
-    if (!quotaService.hasQuota() && !userApiKey) {
-      setIsApiKeyModalOpen(true);
+    // 若完全沒有可用金鑰（使用者未設定且無系統金鑰），主動彈出設定視窗
+    if (!userApiKey && !hasSystemApiKey()) {
+      handleOpenApiKeyModal();
       return;
     }
-    */
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -102,16 +138,25 @@ export default function ChatInterface() {
     } catch (error: any) {
       console.error('Chat Error:', error);
       
-      // 偵測是否為額度用盡 (429)
       const errorString = error?.message || String(error);
       const isQuotaExceeded = errorString.includes('429') || errorString.includes('RESOURCE_EXHAUSTED');
+      const isNoKey = errorString.includes('NO_API_KEY') || errorString.includes('API_KEY_INVALID') || errorString.includes('API Key 尚未設定');
 
-      if (isQuotaExceeded && !userApiKey) {
-        // setIsApiKeyModalOpen(true);
+      if (isQuotaExceeded) {
+        handleOpenApiKeyModal();
         const errorMessage: Message = {
           id: (Date.now() + 1).toString(),
           role: 'model',
-          content: '⚠️ **目前系統諮詢額度已滿 (API 429 Error)**\n\n偵測到 API 限制，但目前為除錯模式，不主動要求輸入 Key。',
+          content: '⚠️ **公共連線額度已達上限 (429 資源限制)**\n\n系統目前免費公共配額已耗盡。已為您彈出「輸入個人 API Key 視窗」，請輸入您的個人 Google Gemini API Key 即可享有獨立額度並繼續諮詢！',
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, errorMessage]);
+      } else if (isNoKey) {
+        handleOpenApiKeyModal();
+        const errorMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'model',
+          content: '🔑 **請設定 Gemini API Key**\n\n尚未偵測到可用的 API Key。已為您開啟設定視窗，請填入個人的 Google Gemini API Key 即可開始使用！',
           timestamp: new Date(),
         };
         setMessages((prev) => [...prev, errorMessage]);
@@ -119,7 +164,7 @@ export default function ChatInterface() {
         const errorMessage: Message = {
           id: (Date.now() + 1).toString(),
           role: 'model',
-          content: '哎呀，發生了一些錯誤（可能與您的 API Key 有關），請檢查後再試。',
+          content: `哎呀，連線時發生錯誤（${errorString.slice(0, 120)}）。若持續發生，請點擊右上角「設定個人 Key」輸入您的個人 Google Gemini API Key。`,
           timestamp: new Date(),
         };
         setMessages((prev) => [...prev, errorMessage]);
@@ -128,8 +173,6 @@ export default function ChatInterface() {
       setIsLoading(false);
     }
   };
-
-  const [isInfoOpen, setIsInfoOpen] = useState(false);
 
   return (
     <div className="flex h-screen bg-bg-gray overflow-hidden">
@@ -196,15 +239,14 @@ export default function ChatInterface() {
                 <span className="text-xs font-medium">
                   {userApiKey ? "個人 API 連線中" : "系統分配連線中"}
                 </span>
-                {userApiKey && (
-                  <button 
-                    onClick={() => setUserApiKey('')}
-                    className="ml-auto text-[10px] bg-white/10 hover:bg-white/20 px-1.5 py-0.5 rounded transition-colors"
-                    title="清除個人 Key"
-                  >
-                    重設
-                  </button>
-                )}
+                <button 
+                  onClick={handleOpenApiKeyModal}
+                  className="ml-auto text-[10px] bg-white/10 hover:bg-white/20 px-2 py-1 rounded transition-colors flex items-center gap-1"
+                  title={userApiKey ? "變更個人 API Key" : "輸入個人 API Key"}
+                >
+                  <Key size={10} />
+                  {userApiKey ? "管理 Key" : "設定 Key"}
+                </button>
               </div>
               <div className="flex items-center gap-2 px-1">
                 <Bot size={12} className="opacity-50" />
@@ -253,15 +295,125 @@ export default function ChatInterface() {
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col bg-white overflow-hidden relative">
-        {/* API Key Modal - 偵錯模式暫時關閉
-      <AnimatePresence>
-        {isApiKeyModalOpen && (
-          ...
-        )}
-      </AnimatePresence>
-      */}
+        {/* API Key Modal */}
+        <AnimatePresence>
+          {isApiKeyModalOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+              onClick={() => setIsApiKeyModalOpen(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0, y: 10 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.95, opacity: 0, y: 10 }}
+                className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-gray-100 overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Modal Header */}
+                <div className="bg-primary-blue text-white px-6 py-5 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 bg-white/10 rounded-lg">
+                      <Key className="text-accent-gold" size={20} />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold tracking-wide">輸入個人 Google Gemini API Key</h2>
+                      <p className="text-[11px] opacity-75">享有獨立專屬額度，連線不塞車</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setIsApiKeyModalOpen(false)}
+                    className="p-1 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
 
-      {/* About Modal */}
+                {/* Modal Body */}
+                <div className="p-6 space-y-4">
+                  <div className="bg-blue-50/70 border border-blue-100 rounded-xl p-3.5 text-xs text-blue-900 leading-relaxed">
+                    <p className="font-semibold mb-1 flex items-center gap-1.5 text-primary-blue">
+                      <span>💡</span> 為什麼需要輸入個人的 API Key？
+                    </p>
+                    <p className="opacity-90">
+                      在 GitHub Pages 靜態網站或系統公共額度達到 Google 429 限制時，填入個人的 Google Gemini API Key 可以確保諮詢服務 100% 正常運作，完全免費且不與其他人共用額度限制。
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-text-dark">
+                        Gemini API Key
+                      </label>
+                      <a
+                        href="https://aistudio.google.com/app/apikey"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[11px] text-primary-blue hover:underline flex items-center gap-1 font-medium"
+                      >
+                        免費取得 API Key
+                        <ExternalLink size={11} />
+                      </a>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type={showApiKeyText ? "text" : "password"}
+                        value={tempApiKey}
+                        onChange={(e) => {
+                          setTempApiKey(e.target.value);
+                          setApiKeyError('');
+                        }}
+                        placeholder="請貼上 AIzaSy 開頭的金鑰..."
+                        className="w-full px-3.5 py-2.5 pr-10 bg-bg-gray border border-border-color rounded-xl text-xs font-mono text-text-dark focus:outline-none focus:ring-2 focus:ring-primary-blue/30 focus:border-primary-blue transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowApiKeyText(!showApiKeyText)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-text-light hover:text-text-dark transition-colors"
+                        title={showApiKeyText ? "隱藏金鑰" : "顯示金鑰"}
+                      >
+                        {showApiKeyText ? <EyeOff size={15} /> : <Eye size={15} />}
+                      </button>
+                    </div>
+                    {apiKeyError && (
+                      <p className="text-[11px] text-red-500 font-medium">{apiKeyError}</p>
+                    )}
+                  </div>
+
+                  <div className="text-[11px] text-text-light flex items-center gap-1.5 pt-1">
+                    <ShieldCheck size={14} className="text-green-600 flex-shrink-0" />
+                    <span>金鑰僅儲存於您的本機瀏覽器（LocalStorage），絕不會傳送至任何第三方後端。</span>
+                  </div>
+
+                  {/* Buttons */}
+                  <div className="flex gap-2.5 pt-2">
+                    {userApiKey && (
+                      <button
+                        type="button"
+                        onClick={handleClearApiKey}
+                        className="flex-1 py-2.5 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl text-xs font-medium transition-colors"
+                      >
+                        清除個人 Key
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleSaveApiKey(tempApiKey)}
+                      className="flex-1 py-2.5 bg-primary-blue hover:brightness-110 text-white rounded-xl text-xs font-medium shadow-md transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <Check size={14} />
+                      {userApiKey ? "更新並套用" : "確認並套用"}
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* About Modal */}
         <AnimatePresence>
           {isInfoOpen && (
             <motion.div
@@ -310,24 +462,31 @@ export default function ChatInterface() {
                 Engine: {currentModel}
               </span>
             </div>
-            {/* Mobile usage indicator - 暫時隱藏
-            <div className="lg:hidden flex items-center gap-1.5 bg-bg-gray px-2.5 py-1 rounded-full border border-border-color">
-              <span className="text-[9px] font-bold text-text-light uppercase">額度</span>
-              <span className="text-[10px] font-bold text-primary-blue">
-                {userApiKey ? "∞" : `${quota.remaining}/${quota.total}`}
-              </span>
-            </div>
-            */}
           </div>
           <div className="font-serif italic text-accent-gold font-bold text-lg hidden md:block">
             Information Management
           </div>
-          <button 
-            onClick={() => setIsInfoOpen(true)}
-            className="p-2 text-text-light hover:bg-bg-gray rounded-full transition-colors lg:hidden"
-          >
-            <Info size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleOpenApiKeyModal}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors",
+                userApiKey 
+                  ? "border-green-300 bg-green-50 text-green-700 hover:bg-green-100" 
+                  : "border-border-color bg-white text-text-dark hover:bg-bg-gray"
+              )}
+              title="設定個人 Gemini API Key"
+            >
+              <Key size={13} className={userApiKey ? "text-green-600" : "text-accent-gold"} />
+              <span>{userApiKey ? "個人 Key (已啟用)" : "設定個人 Key"}</span>
+            </button>
+            <button 
+              onClick={() => setIsInfoOpen(true)}
+              className="p-2 text-text-light hover:bg-bg-gray rounded-full transition-colors lg:hidden"
+            >
+              <Info size={20} />
+            </button>
+          </div>
         </header>
 
         {/* Chat Viewport */}
